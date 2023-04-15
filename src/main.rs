@@ -38,10 +38,11 @@ fn main() -> Result<()> {
     let listener = TcpListener::bind((local_host, port))?;
 
     let dispatch_sender1 = dispatch_sender.clone();
-    
+
     let accept_loop = spawn(move || {
         while let Ok((stream, addr)) = listener.accept() {
             println!("TcpListener accept: {} ", addr);
+            // 将接入连接转发给主线程的 dispatch_loop
             dispatch_sender1.send(DispatchMessage::Connected(stream)).unwrap();
         }
     });
@@ -49,15 +50,15 @@ fn main() -> Result<()> {
 
     while let Ok(dispatch_message) = dispatch_receiver.recv() {
         match dispatch_message {
-            DispatchMessage::Connected(stream) => {
+            DispatchMessage::Connected(stream) => { // 接受并处理来自 channel 的连接消息
                 let dispatch_sender = dispatch_sender.clone();
                 spawn(move || {
-                    if let Ok(RequestResult::Quit) = handle_connection(stream) {
+                    if let Ok(RequestResult::Quit) = handle_connection(stream) { // 如果连接是退出命令（即：/quit），则发送退出消息，退出循环
                         dispatch_sender.send(DispatchMessage::Quit).unwrap();
                     }
                 });
             }
-            DispatchMessage::Quit => { break; }
+            DispatchMessage::Quit => { break; } // 接受并处理来自 channel 的退出消息，收到退出消息时退出循环。
         }
     }
 
@@ -79,26 +80,25 @@ enum RequestResult {
 fn handle_connection(mut stream: TcpStream) -> Result<RequestResult> {
     let mut str = String::new();
     BufReader::new(&stream).read_line(&mut str)?;
-
+    println!("request: {}", str.trim());
     let strsubs: Vec<_> = str.split(" ").collect();
     if strsubs.len() < 3 {
         return Err(Error::from(ErrorKind::InvalidInput));
     }
     let method = strsubs[0];
-    let path = strsubs[1];
-
-    println!("method: {method} , path:{path}");
+    let path = strsubs[1];;
+    println!("method: {method} , path: {path}");
 
     let (path, query) = match path.find("?") {
         Some(pos) => (&path[..pos], &path[(pos+1)..]),
         None => (path, ""),
     };
 
-    if query == "sleep" {
+    if query == "sleep" { // http://127.0.0.1:57486?sleep
         sleep(Duration::new(4, 0));
     }
 
-    if path == "/" {
+    if path == "/" { // http://127.0.0.1:57486 
         write!(stream, "HTTP/1.1 200 OK\r\n\r\n<html><body>Welcome</body></html>")?;
     } else {
         let relative_path = match path.strip_prefix("/") {
@@ -118,7 +118,7 @@ fn handle_connection(mut stream: TcpStream) -> Result<RequestResult> {
     }
     stream.flush()?;
 
-    if query == "quit" {
+    if query == "quit" { // http://127.0.0.1:57486?quit 
         return Ok(RequestResult::Quit);
     }
     return Ok(RequestResult::Ok);
