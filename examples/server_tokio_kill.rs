@@ -1,37 +1,42 @@
 #![allow(dead_code, unused)]
 
 use std::time::Duration;
+
 use tokio::task::spawn;
 use tokio::time::sleep;
 use tokio::io::{Result, Error, ErrorKind, AsyncWriteExt, BufReader, AsyncBufReadExt, copy};
 use tokio::sync::mpsc::unbounded_channel as channel;
 use tokio::fs::File;
 use tokio::net::{TcpListener, TcpStream};
+use tokio::select;
 
 /**
-进化的 Http Server : 一 多线程 的程序改成异步程序：
-转写后，功能完全相同，逻辑也相同，97行的程序只有25行不同。
-1.替换所有 io 的 struct 和 function 为 tokio 提供的版本，基本只要改 use 就可以。
-2.io 之外的阻塞操作比如 sleep 和 channel 也换成 tokio 的
-3.替换后的函数调用，加后缀.await。更明确的说，语句值的类型是 Future 的，加后缀.await。
-4.直接包括 .await 的函数定义，加前缀async
-5.std::thread::spawn 改 tokio::task::spawn，参数的无参数闭包move || {} 改 async 块 async move {}
-6.几处 API 修改。比如 tokio 的channel.recv() 返回Option而不是 Result 。tokio的BufReader 要 &mut stream 而不是 &stream 。write! 宏没有对应的异步实现，展开成 format! 宏和 write 函数调用。
-7.main 函数已经被改成了 async ，再加上#[tokio::main]
+异步实现真正的优雅停机
+
+技术细节：
+1.加一个 channel kill_switch 对这种只发一次的，tokio 的 oneshot 语义更清晰，当然 tokio 的 bounded_channel unbounded_channel 也可以用
+2.accept_loop 内用 select! 处理多个异步事件
+3.主线程结束前 用 kill_switch 发消息给 accept_loop 让其停止， accept_loop.await 类似于线程的 join 等待异步任务退出。
  */
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let (dispatch_sender, mut dispatch_receiver) = channel::<DispatchMessage>();
+    let (kill_switch, kill_switch_receiver) = tokio::sync::oneshot::channel::<()>();
 
     let local_host = "127.0.0.1";
     let port = 20083;
     let listener = TcpListener::bind((local_host, port)).await?;
     let dispatch_sender1 = dispatch_sender.clone();
-
     let accept_loop = spawn(async move {
-        while let Ok((stream, addr)) = listener.accept().await {
-            println!("TcpListener accept: {} ", addr);
-            dispatch_sender1.send(DispatchMessage::Connected(stream)).unwrap();
+        select! {
+            _ = async {
+                while let Ok((stream, addr)) = listener.accept().await {
+                    println!("TcpListener accept: {} ", addr);
+                    dispatch_sender1.send(DispatchMessage::Connected(stream)).unwrap();
+                }
+            } => {}
+            _ = kill_switch_receiver => {}
         }
     });
     println!("server started at http://{}:{}/ serving files in {:?}", local_host, port, std::env::current_dir().unwrap_or_default());
@@ -50,7 +55,8 @@ async fn main() -> Result<()> {
         }
     }
 
-    //accept_loop.await?;
+    kill_switch.send(()).unwrap();
+    accept_loop.await?;
     Ok(())
 }
 
