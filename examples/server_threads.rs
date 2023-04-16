@@ -94,7 +94,7 @@ fn handle_connection(mut stream: TcpStream) -> Result<RequestResult> {
     }
 
     if path == "/" { // http://127.0.0.1:57486 
-        write!(stream, "HTTP/1.1 200 OK\r\n\r\n<html><body>Welcome</body></html>")?;
+        write!(stream, "HTTP/1.1 200 OK\r\n\r\n<html><body>Welcome Threads Server</body></html>")?;
     } else {
         let relative_path = match path.strip_prefix("/") {
             Some(p) => p,
