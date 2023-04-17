@@ -1,4 +1,4 @@
-#![allow(dead_code, unused)]
+// #![allow(dead_code, unused)]
 use std::thread::{sleep, spawn};
 use std::io::{Result, Error, ErrorKind, BufReader, Write, BufRead, copy};
 use std::time::Duration;
@@ -34,7 +34,7 @@ fn main() -> Result<()> {
 
     let dispatch_sender1 = dispatch_sender.clone();
 
-    let accept_loop = spawn(move || {
+    let _accept_loop = spawn(move || {
         while let Ok((stream, addr)) = listener.accept() {
             println!("TcpListener accept: {} ", addr);
             // 将接入连接转发给主线程的 dispatch_loop
@@ -106,7 +106,7 @@ fn handle_connection(mut stream: TcpStream) -> Result<RequestResult> {
                 copy(&mut f, &mut stream)?;
             }
             Err(err) => {
-                eprintln!("{:?}", err);
+                eprintln!("{}", err);
                 write!(stream, "HTTP/1.1 404 NOT FOUND\r\n\r\n<html><body>Not Found {}</body></html>", path)?;
             }
         }

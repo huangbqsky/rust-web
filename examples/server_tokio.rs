@@ -1,4 +1,3 @@
-#![allow(dead_code, unused)]
 
 use std::time::Duration;
 use tokio::task::spawn;
@@ -28,7 +27,7 @@ async fn main() -> Result<()> {
     let listener = TcpListener::bind((local_host, port)).await?;
     let dispatch_sender1 = dispatch_sender.clone();
 
-    let accept_loop = spawn(async move {
+    let _accept_loop = spawn(async move {
         while let Ok((stream, addr)) = listener.accept().await {
             println!("TcpListener accept: {} ", addr);
             dispatch_sender1.send(DispatchMessage::Connected(stream)).unwrap();
@@ -99,6 +98,7 @@ async fn handle_connection(mut stream: TcpStream) -> Result<RequestResult> {
                 copy(&mut f, &mut stream).await?;
             }
             Err(err) => {
+                eprintln!("{}", err);
                 stream.write(format!("HTTP/1.1 404 NOT FOUND\r\n\r\n<html><body>Not Found {}</body></html>", path).as_bytes()).await?;
             }
         }

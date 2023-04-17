@@ -1,5 +1,4 @@
-#![allow(dead_code, unused)]
-
+// #![allow(dead_code, unused)]
 /**
  * 这里可以 diff 比一下 async-std 和 tokio 的不同，你会发现除了改下 use ，调整几处 API，几乎没改什么。
  * 占了一半代码量的 handle_connection 函数，两边甚至完全一样。
@@ -20,7 +19,7 @@ async fn main() -> Result<()> {
     let port = 20083;
     let listener = TcpListener::bind((local_host, port)).await?;
     let dispatch_sender1 = dispatch_sender.clone();
-    let accept_loop = spawn(async move {
+    let _accept_loop = spawn(async move {
         while let Ok((stream, addr)) = listener.accept().await {
             println!("TcpListener accept: {} ", addr);
             dispatch_sender1.send(DispatchMessage::Connected(stream)).await.unwrap();
@@ -91,6 +90,7 @@ async fn handle_connection(mut stream: TcpStream) -> Result<RequestResult> {
                 copy(&mut f, &mut stream).await?;
             }
             Err(err) => {
+                eprintln!("{}", err);
                 stream.write(format!("HTTP/1.1 404 NOT FOUND\r\n\r\n<html><body>Not Found {}</body></html>", path).as_bytes()).await?;
             }
         }
