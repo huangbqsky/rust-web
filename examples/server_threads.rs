@@ -6,7 +6,6 @@ use std::sync::mpsc::channel;
 use std::fs::File;
 use std::net::{TcpListener, TcpStream};
 
-
 /*
 《Rust 程序设计语言》最后实现了一个多线程 web server， 说是实现了优雅停机与清理，其实只是线程池的 drop ，
 只能“在处理两个请求之后通过退出循环来停止 server”。
@@ -81,7 +80,7 @@ fn handle_connection(mut stream: TcpStream) -> Result<RequestResult> {
         return Err(Error::from(ErrorKind::InvalidInput));
     }
     let method = strsubs[0];
-    let path = strsubs[1];;
+    let path = strsubs[1];
     println!("method: {method} , path: {path}");
 
     let (path, query) = match path.find("?") {
