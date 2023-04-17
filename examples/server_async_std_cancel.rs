@@ -1,14 +1,14 @@
-use tokio::task::spawn;
-use tokio::time::sleep;
-use tokio::io::{Result, Error, ErrorKind, AsyncWriteExt, BufReader, AsyncBufReadExt, copy};
+use async_std::task::spawn;
+use async_std::task::sleep;
+use async_std::io::{Result, Error, ErrorKind, BufReader, copy, prelude::*};
 use std::time::Duration;
-use tokio::sync::mpsc::unbounded_channel as channel;
-use tokio::fs::File;
-use tokio::net::{TcpListener, TcpStream};
+use async_std::channel::unbounded as channel;
+use async_std::fs::File;
+use async_std::net::{TcpListener, TcpStream};
 
-#[tokio::main]
+#[async_std::main]
 async fn main() -> Result<()> {
-    let (kill_switch, mut kill_switch_receiver) = channel::<String>();
+    let (kill_switch, kill_switch_receiver) = channel::<String>();
 
     let local_host = "127.0.0.1";
     let port = 20083;
@@ -18,35 +18,26 @@ async fn main() -> Result<()> {
             println!("TcpListener accept: {} ", addr);
             let kill_switch = kill_switch.clone();
             spawn(async move {
-                println!("spawn async handle_connection");
                 if let Ok(RequestResult::Quit) = handle_connection(stream).await {
-                    println!("kill_switch send 'quit' msg");
-                    kill_switch.send("quit".to_string()).unwrap();
+                    kill_switch.send("quit".to_string()).await.unwrap();
                 } else {
-                    println!("kill_switch send 'ok' msg");
-                    kill_switch.send("ok".to_string()).unwrap(); 
+                    kill_switch.send("ok".to_string()).await.unwrap(); 
                 }
             });
         }
     });
     println!("server started at http://{}:{}/ serving files in {:?}", local_host, port, std::env::current_dir().unwrap_or_default());
 
-  
-    // kill_switch_receiver.recv().await;
-    while let Some(msg) = kill_switch_receiver.recv().await {
+    while let Ok(msg) = kill_switch_receiver.recv().await {
         println!("kill_switch_receiver recv msg: {msg}");
         if msg.eq_ignore_ascii_case(&String::from("quit")) {
             println!("quit loop, cancel task");
-            accept_loop.abort(); // 取消任务
+            accept_loop.cancel().await; // 取消任务
             break;
         }
     }
-    // accept_loop.abort(); // 取消任务
-    match accept_loop.await { // tokio::task::JoinHandle.abort 可以继续 JoinHandle.await
-        Ok(_) => Ok(()),
-        Err(e) if e.is_cancelled() => Ok(()),
-        Err(e) => Err(e),
-    }?;
+    // accept_loop.cancel().await; // 取消任务
+    //accept_loop.await;
     Ok(())
 }
 
@@ -54,7 +45,6 @@ enum RequestResult {
     Ok,
     Quit,
 }
-
 async fn handle_connection(mut stream: TcpStream) -> Result<RequestResult> {
     let mut str = String::new();
     BufReader::new(&mut stream).read_line(&mut str).await?;
@@ -77,7 +67,7 @@ async fn handle_connection(mut stream: TcpStream) -> Result<RequestResult> {
     }
 
     if path == "/" {
-        stream.write("HTTP/1.1 200 OK\r\n\r\n<html><body>Welcome Tokio Server</body></html>".as_bytes()).await?;
+        stream.write("HTTP/1.1 200 OK\r\n\r\n<html><body>Welcome async_std Server</body></html>".as_bytes()).await?;
     } else {
         let relative_path = match path.strip_prefix("/") {
             Some(p) => p,
