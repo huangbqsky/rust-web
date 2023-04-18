@@ -11,7 +11,7 @@ use async_std::path::PathBuf;
 use async_std::prelude::*;
 
 /**
- * 最终版，一个带命令行的程序 
+ * 一个简易版web server 最终版，一个带命令行的程序 
  * start: 启动 
  * stop: 停止 
  * restart: 重启 
