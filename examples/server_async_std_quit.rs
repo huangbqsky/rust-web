@@ -1,3 +1,4 @@
+#![allow(dead_code, unused, unused_imports)]
 
 use std::time::Duration;
 use async_std::task::spawn;
@@ -19,24 +20,24 @@ async fn main() -> Result<()> {
     let port = 20083;
     let listener = TcpListener::bind((local_host, port)).await?;
 
-    let accept_loop = spawn(FutureExt::race(
-        async move {
-            while let Ok((stream, addr)) = listener.accept().await {
-                let kill_switch = kill_switch.clone();
-                spawn(async move {
-                    if let Ok(RequestResult::Quit) = handle_connection(stream).await {
-                        kill_switch.send(()).await;
-                    }
-                });
-            }
-        },
-        async move {
-            kill_switch_receiver.recv().await;
-        })
-    );
-    println!("server started at http://{}:{}/ serving files in {:?}", local_host, port, std::env::current_dir().unwrap_or_default());
+    // let accept_loop = spawn(FutureExt::race(
+    //     async move {
+    //         while let Ok((stream, addr)) = listener.accept().await {
+    //             let kill_switch = kill_switch.clone();
+    //             spawn(async move {
+    //                 if let Ok(RequestResult::Quit) = handle_connection(stream).await {
+    //                     kill_switch.send(()).await;
+    //                 }
+    //             });
+    //         }
+    //     },
+    //     async move {
+    //         kill_switch_receiver.recv().await;
+    //     })
+    // );
+    // println!("server started at http://{}:{}/ serving files in {:?}", local_host, port, std::env::current_dir().unwrap_or_default());
 
-    accept_loop.await;
+    // accept_loop.await;
     Ok(())
 }
 

@@ -1,0 +1,16 @@
+<!doctype html>
+<html>
+    <head>
+    <meta charset="utf-8">
+        <title>上传文件(仅支持图片上传)</title>
+    </head>
+    <body>
+        <form action="/save_image" method="post" enctype="multipart/form-data">
+            <label>
+            上传文件(仅支持图片上传)：
+                <input type="file" name="file">
+            </label>
+            <button type="submit">上传文件</button>
+        </form>
+    </body>
+</html>
