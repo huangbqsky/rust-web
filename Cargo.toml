@@ -16,7 +16,9 @@ actix-web = "4.2.1" # web 框架
 serde = { version = "1.0", features = ["derive"] } #序列化库
 serde_json = "1.0"
 
-axum = {version="0.5.17", features = ["headers"]}
+axum = {version="0.5.17", features = ["multipart","headers"]}
+tower-http = { version = "0.3.4", features = ["fs", "trace"] }
+rand = "0.8.5"
 
 tracing= "0.1.37"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
