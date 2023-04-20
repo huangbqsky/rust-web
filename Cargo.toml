@@ -16,6 +16,8 @@ actix-web = "4.2.1" # web 框架
 serde = { version = "1.0", features = ["derive"] } #序列化库
 serde_json = "1.0"
 
+axum = "0.5.17"
+
 [dependencies.tokio]
 version = "1.22.0"
 features = ["full"]
