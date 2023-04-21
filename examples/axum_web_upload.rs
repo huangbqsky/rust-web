@@ -47,12 +47,12 @@ async fn show_upload() -> Html<&'static str> {
 
 // 上传图片 ，20M限制
 async fn save_image(
-    ContentLengthLimit(mut multipart): ContentLengthLimit<Multipart, { /* 20M 限制*/ 1024 * 1024 * 20 }>,
+    ContentLengthLimit(mut multipart): ContentLengthLimit<Multipart, { 1024 * 1024 * 20 }>,
 ) -> Result<(StatusCode, HeaderMap), String> {
     if let Some(file) = multipart.next_field().await.unwrap() {
         //文件类型
         let content_type = file.content_type().unwrap().to_string();
-
+        println!("content_type: {}", content_type);
         //校验是否为图片(出于安全考虑)
         if content_type.starts_with("image/") {
             //根据文件类型生成随机文件名(出于安全考虑)
