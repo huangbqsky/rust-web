@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use axum::{
     extract::{ContentLengthLimit, Multipart, Path},
     http::header::{HeaderMap, HeaderName, HeaderValue},
@@ -21,7 +22,8 @@ const SAVE_FILE_BASE_PATH: &str = "/Users/huangbq/Downloads/upload";
 3. 防止伪装mimetype进行攻击（比如：把.js文件改后缀变成.jpg伪装图片上传，早期有很多这类攻击)
 另外，上传图片后，还可以让浏览器重定向到上传后的图片（当然，仅仅只是演示技术实现，实际应用中并非一定要这样）
  */
-// 上传表单
+
+// 显示上传图片的 Html页面的 上传表单 ，使用静态字符串
 async fn show_upload() -> Html<&'static str> {
     Html(
         r#"
@@ -42,7 +44,12 @@ async fn show_upload() -> Html<&'static str> {
             </body>
         </html>
         "#,
-    )
+    ) 
+}
+
+// 显示上传图片的 Html页面(直接加载html文件方式)
+async fn show_upload_image() -> Html<String> {
+    Html::from(std::fs::read_to_string("upload.html").unwrap())  
 }
 
 // 上传图片 ，20M限制
@@ -138,6 +145,7 @@ async fn main() {
     // our router
     let app = Router::new()
         .route("/upload", get(show_upload))
+        .route("/upload_image", get(show_upload_image))
         .route("/save_image", post(save_image))
         .route("/show_image/:id", get(show_image))
         .layer(TraceLayer::new_for_http());
