@@ -151,6 +151,21 @@ async fn home(depot: &mut Depot) -> String  {
  
 }
 
+// 自定义错误类型
+struct CustomError;
+#[async_trait]
+impl Writer for CustomError {
+    async fn write(mut self, _req: &mut Request, _depot: &mut Depot, res: &mut Response) {
+        res.render("custom error");
+        res.set_status_error(StatusError::internal_server_error());
+    }
+}
+
+#[handler]
+async fn handle_custom() -> Result<(), CustomError> {
+    Err(CustomError)
+}
+
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt().init();
@@ -162,7 +177,8 @@ async fn main() {
         .push(Router::with_path("hello").get(hello)) // http://127.0.0.1:7878/hello?id=123
         .push(Router::with_path("resp").get(show_resp)) // http://127.0.0.1:7878/resp
         .push(Router::with_hoop(set_user).get(home)) // http://127.0.0.1:7878
-        .push(Router::with_path("users/<id>").get(show).post(edit)); // http://127.0.0.1:7878/users/95
+        .push(Router::with_path("users/<id>").get(show).post(edit)) // http://127.0.0.1:7878/users/95
+        .push(Router::new().path("custom").get(handle_custom)); // http://127.0.0.1:7878/custom
     Server::new(TcpListener::bind(addr))
         .serve(router)
         .await;
