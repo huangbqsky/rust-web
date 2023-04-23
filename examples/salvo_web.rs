@@ -1,5 +1,5 @@
 use salvo::{macros::Extractible};
-use salvo::prelude::*;
+use salvo::{prelude::*, Catcher};
 use serde::{Deserialize, Serialize};
 
 #[handler]
@@ -166,6 +166,19 @@ async fn handle_custom() -> Result<(), CustomError> {
     Err(CustomError)
 }
 
+// Catcher 是用于处理页面返回 HTTP 状态码为错误的情况下, 如何显示页面的抽象.
+struct Handle404;
+impl Catcher for Handle404 {
+    fn catch(&self, _req: &Request, _depot: &Depot, res: &mut Response) -> bool {
+        if let Some(StatusCode::NOT_FOUND) = res.status_code() {
+            res.render("Custom 404 Error Page");
+            true
+        } else {
+            false
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt().init();
@@ -179,7 +192,10 @@ async fn main() {
         .push(Router::with_hoop(set_user).get(home)) // http://127.0.0.1:7878
         .push(Router::with_path("users/<id>").get(show).post(edit)) // http://127.0.0.1:7878/users/95
         .push(Router::new().path("custom").get(handle_custom)); // http://127.0.0.1:7878/custom
+
+    let catchers: Vec<Box<dyn Catcher>> = vec![Box::new(Handle404)]; // catchers 错误页面
+    let service = Service::new(router).with_catchers(catchers); // 设置 router 和 catcher
     Server::new(TcpListener::bind(addr))
-        .serve(router)
+        .serve(service)
         .await;
 }
