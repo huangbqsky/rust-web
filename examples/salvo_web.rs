@@ -96,6 +96,32 @@ async fn index() -> &'static str {
     "Hello world"
 }
 
+#[derive(Serialize, Debug)]
+struct User {
+    name: String,
+}
+
+
+// 在 Handler 中, Response 会被作为参数传入
+#[handler]
+async fn show_resp(res: &mut Response, ctrl: &mut FlowCtrl) {
+    ctrl.skip_rest();
+    // 写入纯文本数据
+    // res.render("Hello world! Response and FlowCtrl example");
+
+    // 写入 HTML
+    // res.render(Text::Html("<html><body>Hello Salvo! Response and FlowCtrl example</body></html>"));
+
+    // 写入 JSON 序列化数据
+    // let user = User{name: "Johee".to_string()};
+    // res.render(Json(user));
+
+    // 写入错误信息代码
+    // res.set_status_code(StatusCode::BAD_REQUEST);
+    // 写入详细错误信息
+    res.set_status_error(StatusError::internal_server_error().with_summary("error when serialize object to json"));
+  
+}
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt().init();
@@ -105,6 +131,7 @@ async fn main() {
     let router = Router::new()
         .push(Router::new().get(index)) // http://127.0.0.1:7878
         .push(Router::with_path("hello").get(hello)) // http://127.0.0.1:7878/hello?id=123
+        .push(Router::with_path("resp").get(show_resp)) // http://127.0.0.1:7878/resp
         .push(Router::with_path("users/<id>").get(show).post(edit)); // http://127.0.0.1:7878/users/95
     Server::new(TcpListener::bind(addr))
         .serve(router)
