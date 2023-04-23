@@ -120,8 +120,37 @@ async fn show_resp(res: &mut Response, ctrl: &mut FlowCtrl) {
     // res.set_status_code(StatusCode::BAD_REQUEST);
     // 写入详细错误信息
     res.set_status_error(StatusError::internal_server_error().with_summary("error when serialize object to json"));
-  
 }
+
+
+#[derive(Default, Debug)]
+struct Config {
+    id: i32,
+}
+
+// Depot 是用于保存一次请求中涉及到的临时数据. 中间件可以将自己处理的临时数据放入 Depot, 供后续程序使用.
+// 比如说, 我们可以在登录的中间件中设置 current_user, 然后在后续的中间件或者 Handler 中读取当前用户信息.
+// 通过 insert 和 get 设置和取出k-v键值对数据
+// 通过 inject 和 obtain 设置和取出非键值对数据
+#[handler]
+async fn set_user(depot: &mut Depot)  {
+  // 插入键值对数据到 Depot中
+  depot.insert("current_user", "Elon Musk");
+
+  // 不需要关系具体 key 的数据保存
+  depot.inject(Config::default());
+}
+#[handler]
+async fn home(depot: &mut Depot) -> String  {
+  // 取出数据非键值对数据
+  let config = depot.obtain::<Config>().unwrap();
+
+  // 需要注意的是, 这里的类型必须是 &str, 而不是 String, 因为当初存入的数据类型为 &str.
+  let user = depot.get::<&str>("current_user").copied().unwrap();
+  format!("Hey {}, I love your money and girls!， config id: {:?}", user, config.id)
+ 
+}
+
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt().init();
@@ -129,9 +158,10 @@ async fn main() {
     println!("listening on {}", addr);
     // 路由
     let router = Router::new()
-        .push(Router::new().get(index)) // http://127.0.0.1:7878
+        .push(Router::with_path("index").get(index)) // http://127.0.0.1:7878/index
         .push(Router::with_path("hello").get(hello)) // http://127.0.0.1:7878/hello?id=123
         .push(Router::with_path("resp").get(show_resp)) // http://127.0.0.1:7878/resp
+        .push(Router::with_hoop(set_user).get(home)) // http://127.0.0.1:7878
         .push(Router::with_path("users/<id>").get(show).post(edit)); // http://127.0.0.1:7878/users/95
     Server::new(TcpListener::bind(addr))
         .serve(router)
