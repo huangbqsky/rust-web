@@ -1,6 +1,13 @@
+use std::time::Duration;
+
 use salvo::{macros::Extractible};
 use salvo::{prelude::*, Catcher};
+use salvo::writer::Text;
+use salvo::cache::{Cache, MemoryStore, RequestIssuer};
+use time::OffsetDateTime;
+
 use serde::{Deserialize, Serialize};
+
 
 #[handler]
 async fn show(req: &mut Request, res: &mut Response) {
@@ -141,7 +148,7 @@ async fn set_user(depot: &mut Depot)  {
   depot.inject(Config::default());
 }
 #[handler]
-async fn home(depot: &mut Depot) -> String  {
+async fn hoop(depot: &mut Depot) -> String  {
   // 取出数据非键值对数据
   let config = depot.obtain::<Config>().unwrap();
 
@@ -179,17 +186,66 @@ impl Catcher for Handle404 {
     }
 }
 
+#[handler]
+async fn home() -> Text<&'static str> {
+    Text::Html(r#"
+    <!DOCTYPE html>
+    <html>
+        <head>
+            <title>Cache Example</title>
+        </head>
+        <body>
+            <h2>Cache Example</h2>
+            <p>
+                This examples shows how to use cache middleware. 
+            </p>
+            <p>
+                <a href="/short" target="_blank">Cache 5 seconds</a>
+            </p>
+            <p>
+                <a href="/long" target="_blank">Cache 1 minute</a>
+            </p>
+        </body>
+    </html>
+    "#)
+}
+
+#[handler]
+async fn short() -> String {
+    format!("Hello World, my birth time is {}", OffsetDateTime::now_utc())
+}
+#[handler]
+async fn long() -> String {
+    format!("Hello World, my birth time is {}", OffsetDateTime::now_utc())
+}
+
+
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt().init();
     let addr = "127.0.0.1:7878";
     println!("listening on {}", addr);
+    tracing::info!("Listening on http://127.0.0.1:7878");
+
+    // Cache 中间件可以对 Response 中的 StatusCode, Headers, Body 提供缓存功能
+    let short_cache = Cache::new(
+        MemoryStore::builder().time_to_live(Duration::from_secs(5)).build(),
+        RequestIssuer::default(),
+    );
+    let long_cache = Cache::new(
+        MemoryStore::builder().time_to_live(Duration::from_secs(60)).build(),
+        RequestIssuer::default(),
+    );
+    
     // 路由
     let router = Router::new()
+        .get(home)
+        .push(Router::with_path("short").hoop(short_cache).get(short)) // http://127.0.0.1:7878/short  中间件 short_cache
+        .push(Router::with_path("long").hoop(long_cache).get(long)) // http://127.0.0.1:7878/long  中间件 long_cache
+        .push(Router::with_path("hoop").hoop(set_user).get(hoop)) // http://127.0.0.1:7878/hoop  中间件 set_user
         .push(Router::with_path("index").get(index)) // http://127.0.0.1:7878/index
         .push(Router::with_path("hello").get(hello)) // http://127.0.0.1:7878/hello?id=123
         .push(Router::with_path("resp").get(show_resp)) // http://127.0.0.1:7878/resp
-        .push(Router::with_hoop(set_user).get(home)) // http://127.0.0.1:7878
         .push(Router::with_path("users/<id>").get(show).post(edit)) // http://127.0.0.1:7878/users/95
         .push(Router::new().path("custom").get(handle_custom)); // http://127.0.0.1:7878/custom
 
