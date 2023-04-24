@@ -1,6 +1,4 @@
-# rust-web
-
-### Rust web Example
+# Rust web Example
 
 1. tokio web example
 2. async_std web example
