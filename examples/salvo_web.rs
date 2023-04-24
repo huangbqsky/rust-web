@@ -1,13 +1,18 @@
+use std::convert::Infallible;
 use std::time::Duration;
 
-use salvo::{macros::Extractible};
-use salvo::{prelude::*, Catcher};
-use salvo::writer::Text;
 use salvo::cache::{Cache, MemoryStore, RequestIssuer};
+use salvo::macros::Extractible;
+use salvo::sse::SseEvent;
+use salvo::writer::Text;
+use salvo::{prelude::*, Catcher};
 use time::OffsetDateTime;
 
-use serde::{Deserialize, Serialize};
+use futures::StreamExt;
+use tokio::time::interval;
+use tokio_stream::wrappers::IntervalStream;
 
+use serde::{Deserialize, Serialize};
 
 #[handler]
 async fn show(req: &mut Request, res: &mut Response) {
@@ -108,7 +113,6 @@ struct User {
     name: String,
 }
 
-
 // 在 Handler 中, Response 会被作为参数传入
 #[handler]
 async fn show_resp(res: &mut Response, ctrl: &mut FlowCtrl) {
@@ -126,9 +130,10 @@ async fn show_resp(res: &mut Response, ctrl: &mut FlowCtrl) {
     // 写入错误信息代码
     // res.set_status_code(StatusCode::BAD_REQUEST);
     // 写入详细错误信息
-    res.set_status_error(StatusError::internal_server_error().with_summary("error when serialize object to json"));
+    res.set_status_error(
+        StatusError::internal_server_error().with_summary("error when serialize object to json"),
+    );
 }
-
 
 #[derive(Default, Debug)]
 struct Config {
@@ -140,22 +145,24 @@ struct Config {
 // 通过 insert 和 get 设置和取出k-v键值对数据
 // 通过 inject 和 obtain 设置和取出非键值对数据
 #[handler]
-async fn set_user(depot: &mut Depot)  {
-  // 插入键值对数据到 Depot中
-  depot.insert("current_user", "Elon Musk");
+async fn set_user(depot: &mut Depot) {
+    // 插入键值对数据到 Depot中
+    depot.insert("current_user", "Elon Musk");
 
-  // 不需要关系具体 key 的数据保存
-  depot.inject(Config::default());
+    // 不需要关系具体 key 的数据保存
+    depot.inject(Config::default());
 }
 #[handler]
-async fn hoop(depot: &mut Depot) -> String  {
-  // 取出数据非键值对数据
-  let config = depot.obtain::<Config>().unwrap();
+async fn hoop(depot: &mut Depot) -> String {
+    // 取出数据非键值对数据
+    let config = depot.obtain::<Config>().unwrap();
 
-  // 需要注意的是, 这里的类型必须是 &str, 而不是 String, 因为当初存入的数据类型为 &str.
-  let user = depot.get::<&str>("current_user").copied().unwrap();
-  format!("Hey {}, I love your money and girls!， config id: {:?}", user, config.id)
- 
+    // 需要注意的是, 这里的类型必须是 &str, 而不是 String, 因为当初存入的数据类型为 &str.
+    let user = depot.get::<&str>("current_user").copied().unwrap();
+    format!(
+        "Hey {}, I love your money and girls!， config id: {:?}",
+        user, config.id
+    )
 }
 
 // 自定义错误类型
@@ -188,7 +195,8 @@ impl Catcher for Handle404 {
 
 #[handler]
 async fn home() -> Text<&'static str> {
-    Text::Html(r#"
+    Text::Html(
+        r#"
     <!DOCTYPE html>
     <html>
         <head>
@@ -207,18 +215,54 @@ async fn home() -> Text<&'static str> {
             </p>
         </body>
     </html>
-    "#)
+    "#,
+    )
 }
 
 #[handler]
 async fn short() -> String {
-    format!("Hello World, my birth time is {}", OffsetDateTime::now_utc())
+    format!(
+        "Hello World, my birth time is {}",
+        OffsetDateTime::now_utc()
+    )
 }
 #[handler]
 async fn long() -> String {
-    format!("Hello World, my birth time is {}", OffsetDateTime::now_utc())
+    format!(
+        "Hello World, my birth time is {}",
+        OffsetDateTime::now_utc()
+    )
 }
 
+// create server-sent event
+fn sse_counter(counter: u64) -> Result<SseEvent, Infallible> {
+    Ok(SseEvent::default().data(counter.to_string()))
+}
+
+// sse 测试用例: 每3秒向客户端发送一次消息，每1秒发送一次保活
+#[handler]
+async fn handle_tick(res: &mut Response) {
+    let event_stream = {
+        let mut counter: u64 = 0;
+        let interval = interval(Duration::from_secs(3));
+        let stream = IntervalStream::new(interval);
+        // 每3秒，向浏览器发1次消息
+        stream.map(move |_| {
+            counter += 1;
+            // create server-sent event
+            sse_counter(counter)
+        })
+    };
+
+    // sse::streaming(res, event_stream).ok();
+
+    //每隔1秒发1次保活(可以理解成心跳包)
+    SseKeepAlive::new(event_stream)
+        .with_comment("keep-alive-text")
+        .with_interval(Duration::from_secs(1))
+        .streaming(res)
+        .unwrap();
+}
 
 #[tokio::main]
 async fn main() {
@@ -229,29 +273,32 @@ async fn main() {
 
     // Cache 中间件可以对 Response 中的 StatusCode, Headers, Body 提供缓存功能
     let short_cache = Cache::new(
-        MemoryStore::builder().time_to_live(Duration::from_secs(5)).build(),
+        MemoryStore::builder()
+            .time_to_live(Duration::from_secs(5))
+            .build(),
         RequestIssuer::default(),
     );
     let long_cache = Cache::new(
-        MemoryStore::builder().time_to_live(Duration::from_secs(60)).build(),
+        MemoryStore::builder()
+            .time_to_live(Duration::from_secs(60))
+            .build(),
         RequestIssuer::default(),
     );
-    
+
     // 路由
     let router = Router::new()
         .get(home)
         .push(Router::with_path("short").hoop(short_cache).get(short)) // http://127.0.0.1:7878/short  中间件 short_cache
         .push(Router::with_path("long").hoop(long_cache).get(long)) // http://127.0.0.1:7878/long  中间件 long_cache
         .push(Router::with_path("hoop").hoop(set_user).get(hoop)) // http://127.0.0.1:7878/hoop  中间件 set_user
+        .push(Router::with_path("ticks").get(handle_tick)) // http://127.0.0.1:7878/ticks  向客户端发送消息
         .push(Router::with_path("index").get(index)) // http://127.0.0.1:7878/index
         .push(Router::with_path("hello").get(hello)) // http://127.0.0.1:7878/hello?id=123
         .push(Router::with_path("resp").get(show_resp)) // http://127.0.0.1:7878/resp
         .push(Router::with_path("users/<id>").get(show).post(edit)) // http://127.0.0.1:7878/users/95
-        .push(Router::new().path("custom").get(handle_custom)); // http://127.0.0.1:7878/custom
+        .push(Router::new().path("custom_err").get(handle_custom)); // http://127.0.0.1:7878/custom_err
 
     let catchers: Vec<Box<dyn Catcher>> = vec![Box::new(Handle404)]; // catchers 错误页面
     let service = Service::new(router).with_catchers(catchers); // 设置 router 和 catcher
-    Server::new(TcpListener::bind(addr))
-        .serve(service)
-        .await;
+    Server::new(TcpListener::bind(addr)).serve(service).await;
 }
