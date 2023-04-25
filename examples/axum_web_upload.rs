@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 use axum::{
-    extract::{ContentLengthLimit, Multipart, Path},
+    extract::{DefaultBodyLimit, Multipart, Path},
     http::header::{HeaderMap, HeaderName, HeaderValue},
     http::StatusCode,
     response::Html,
@@ -12,6 +12,7 @@ use rand::prelude::random;
 use std::fs::read;
 use std::net::SocketAddr;
 use tower_http::trace::TraceLayer;
+use tower_http::limit::RequestBodyLimitLayer;
 
 const SAVE_FILE_BASE_PATH: &str = "/Users/huangbq/Downloads/upload";
 /**
@@ -52,10 +53,8 @@ async fn show_upload_image() -> Html<String> {
     Html::from(std::fs::read_to_string("upload.html").unwrap())  
 }
 
-// 上传图片 ，20M限制
-async fn save_image(
-    ContentLengthLimit(mut multipart): ContentLengthLimit<Multipart, { 1024 * 1024 * 20 }>,
-) -> Result<(StatusCode, HeaderMap), String> {
+// 上传图片
+async fn save_image(mut multipart: Multipart) -> Result<(StatusCode, HeaderMap), String> {
     if let Some(file) = multipart.next_field().await.unwrap() {
         //文件类型
         let content_type = file.content_type().unwrap().to_string();
@@ -148,6 +147,10 @@ async fn main() {
         .route("/upload_image", get(show_upload_image))
         .route("/save_image", post(save_image))
         .route("/show_image/:id", get(show_image))
+        .layer(DefaultBodyLimit::disable())
+        .layer(RequestBodyLimitLayer::new(
+            250 * 1024 * 1024, /* 250mb */
+        ))
         .layer(TraceLayer::new_for_http());
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 8080));

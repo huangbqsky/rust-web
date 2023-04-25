@@ -1,7 +1,6 @@
 use axum::{
-    body::Body, http::Request, http::StatusCode, response::Response, routing::get_service, Router,
+    body::Body, http::Request, response::Response, routing::get_service, Router,
 };
-use futures::io;
 use std::{convert::Infallible, net::SocketAddr};
 use tower::service_fn;
 use tower_http::services::ServeFile;
@@ -12,12 +11,7 @@ async fn main() {
         // GET `/static/Cargo.toml` goes to a service from tower-http
         .route(
             "/static",
-            get_service(ServeFile::new("Cargo.toml")).handle_error(|error: io::Error| async move {
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    format!("Unhandled internal error: {}", error),
-                )
-            }),
+            get_service(ServeFile::new("Cargo.toml")),
         )
         .route(
             // Any request to `/` goes to a some `Service`
