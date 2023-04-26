@@ -4,17 +4,20 @@ use axum::{
     routing::get,
     Extension, Router,
 };
-use std::sync::Arc;
+use std::sync::{Arc, atomic::{AtomicUsize, Ordering}};
 
 // 共享状态结构体
+#[derive(Debug)]
 struct AppState {
     // ...
+    state: AtomicUsize,
 }
 
 // 方法1: 使用 State 状态提取器
 async fn handler_as_state_extractor(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     // ...
-    String::from("State extract shared_state")
+    state.state.fetch_add(1, Ordering::SeqCst); //请求一次 state 的值递增1
+    format!("State extract shared_state: {:?}", state)
 }
 
 // 方法2: 使用 Extension 请求扩展提取器
@@ -22,19 +25,21 @@ async fn handler_as_state_extractor(State(state): State<Arc<AppState>>) -> impl 
 // 或者因为您提取了错误的类型，那么您将得到运行时错误(特别是500 Internal Server Error 响应)。
 async fn handler_as_extension_extractor(Extension(state): Extension<Arc<AppState>>) -> impl IntoResponse {
     // ...
-    String::from("Extension extract shared_state")
+    state.state.fetch_add(1, Ordering::SeqCst); //请求一次 state 的值递增1
+    format!("Extension extract shared_state: {:?}", state)
 }
 
 // 方法3: 使用闭包捕获（closure captures）直接传递给处理器
 async fn get_user(Path(user_id): Path<String>, state: Arc<AppState>) -> impl IntoResponse {
     // ...
-    String::from("closure captures shared_state")
+    state.state.fetch_add(1, Ordering::SeqCst); //请求一次 state 的值递增1
+    format!("closure captures shared_state: {:?}", state)
 }
 
 #[tokio::main]
 async fn main() {
     // 处理器共享状态（Sharing state with handlers），使用一种方式即可
-    let shared_state = Arc::new(AppState { /* ... */ });
+    let shared_state = Arc::new(AppState { state: 0.into() /* ... */ });
     let shared_state_extension = Arc::clone(&shared_state);
     let shared_state_closure = Arc::clone(&shared_state);
 
