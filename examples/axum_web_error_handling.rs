@@ -13,9 +13,9 @@ use tower::ServiceBuilder;
 #[tokio::main]
 async fn main() {
     let app = Router::new()
+        .merge(router_fallible_service()) // 模拟使用 Service的错误处理
         .merge(router_fallible_middleware()) // 模拟使用中间件的错误处理
-        .merge(router_fallible_extractor()) // 模拟使用提取器的错误处理
-        .merge(router_fallible_service());  // 模拟使用 Service的错误处理
+        .merge(router_fallible_extractor());  // 模拟使用提取器的错误处理  
 
     let addr = "127.0.0.1:3000";
     println!("listening on {}", addr);
@@ -25,7 +25,7 @@ async fn main() {
         .unwrap();
 }
 
-// 用 Service 适配器通过将错误转换为响应来处理错误的路由
+// 错误处理方式1: 模拟使用 Service的错误处理
 fn router_fallible_service() -> Router {
     // 这个 Service 可能出现任何错误
     let some_fallible_service = tower::service_fn(|_req| async {
@@ -61,7 +61,7 @@ async fn handler_timeout() -> impl IntoResponse {
     format!("Hello Error Handling !!!")
 }
 
-// 用中间件处理错误的路由
+// 错误处理方式2 : 用中间件处理错误的路由
 fn router_fallible_middleware() -> Router {
     Router::new()
         .route("/fallible_middleware", get(handler_timeout))
@@ -89,7 +89,7 @@ async fn handler_timeout_error(err: BoxError) -> (StatusCode, String) {
     }
 }
 
-// 用运行时提取器 Extractor 中间件处理错误的路由
+// 错误处理方式3: 用运行时提取器处理错误的路由
 fn router_fallible_extractor() -> Router {
     Router::new()
         .route("/fallible_extractor", get(handler_timeout))
